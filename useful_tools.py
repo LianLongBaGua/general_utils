@@ -40,7 +40,7 @@ def load_essentials(symbol: str, start: str, end: str, exchange: str):
     return df
 
 
-def prep_label(df, col: str, lag: int, label: str, noise=0.01):
+def prep_label(df, col: str, forward_window: int, label: str, noise=0.01):
     """
     compare whether the next nth bar is an up or a down move
     label using one_hot encoding
@@ -73,9 +73,9 @@ def prep_label(df, col: str, lag: int, label: str, noise=0.01):
             else:
                 return 0
 
-    df[col + "_shifted"] = df[col].shift(lag)
+    df[col + "_shifted"] = df[col].shift(forward_window)
 
-    df[f"{lag}_move_label"] = df.apply(
+    df[f"{forward_window}_move_label"] = df.apply(
         compare_values, axis=1, args=(col, col + "_shifted")
     )
 
@@ -83,23 +83,15 @@ def prep_label(df, col: str, lag: int, label: str, noise=0.01):
     df.drop([col + "_shifted"], axis=1, inplace=True)
 
 
-def create_sequence_all(df, seq_length):
-    """
-    create list of all col sequences of length 'seq_length'
-    This 'seq_lengh' is elsewhere defined as 'lag'
-    """
-    x_cols = [
-        col
-        for col in df.columns
-        if col != f"-{seq_length}_move_label" and col != "close_price_shifted"
-    ]
-    xs = np.stack([df[x_col].values for x_col in x_cols], axis=-1)
-    xss = np.stack(
-        [xs[i : i + seq_length] for i in range(xs.shape[0] - seq_length - 1)], axis=0
-    )
-    ys = np.vstack(df[f"-{seq_length}_move_label"].iloc[seq_length:-1].values)
-
-    return np.array(xss), np.array(ys)
+def create_sequence_all(df, lag_window):
+    arr = df.values
+    resultX = np.empty((len(arr) - lag_window + 1, lag_window, arr.shape[1]-1))
+    resulty = np.empty((len(arr) - lag_window + 1, 3))
+    for start in range(len(arr) - lag_window + 1):
+        resultX[start] = arr[start : start + lag_window, 0:-1]
+        resulty[start] = arr[start + lag_window-1, -1]
+    
+    return resultX, resulty
 
 
 def trim_df(df: pd.DataFrame, keep_symbol=False):
@@ -128,10 +120,10 @@ def divide_means(list1, list2):
     return [mean1 / mean2 for mean1, mean2 in zip(means1, means2)]
 
 
-def evaluate_signal(pred):
-    if pred == [1, 0, 0]:
+def evaluate_signal(pred) -> int:
+    if pred == torch.tensor[1., 0., 0.]:
         return 1
-    elif pred == [0, 1, 0]:
+    elif pred == torch.tensor[0., 1., 0.]:
         return 0
     else:
         return -1

@@ -26,6 +26,7 @@ def define_model(model: nn.Module):
 
     return model
 
+
 def train_eval_model(
     model: nn.Module,
     criterion: nn.Module,
@@ -90,7 +91,7 @@ def train_eval_model(
     return model
 
 
-def prep_for_dl(df: pd.DataFrame, lag: int):
+def prep_for_dl(df: pd.DataFrame, lag_window: int, forward_window: int):
     """prepare dataset"""
     df["open_interest"] = df["open_interest"].pct_change()
     df["volume"] = df["volume"].pct_change()
@@ -99,8 +100,8 @@ def prep_for_dl(df: pd.DataFrame, lag: int):
     standardize(df)
     df.dropna(inplace=True)
     df = renaming(df)
-    prep_label(df, "close", -lag, "one_hot")
-    X, y = create_sequence_all(df, lag)
+    prep_label(df, "close", -forward_window, "one_hot")
+    X, y = create_sequence_all(df, lag_window)
     X, y = torch.tensor(X, dtype=torch.float32), torch.Tensor(y)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.33, random_state=32

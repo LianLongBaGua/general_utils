@@ -23,4 +23,4 @@ class ConvLSTMNet(nn.Module):
         x = F.relu(self.fc1(x))
         x, _ = self.lstm(x.view(1, x.size(0), -1))  # LSTM expects a 3D input (seq_len, batch, input_size)
         x = self.fc2(x.view(x.size(1), -1))
-        return F.log_softmax(x, dim=1)  # apply log softmax to the output
+        return x
