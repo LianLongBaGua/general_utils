@@ -14,14 +14,38 @@ from torch.nn.utils.rnn import pad_sequence
 from usefultools.useful_tools import *
 
 
+def prep_for_dl(df: pd.DataFrame, lag_window: int, forward_window: int):
+    """prepare dataset"""
+    df["open_interest"] = df["open_interest"].pct_change()
+    df["volume"] = df["volume"].pct_change()
+    df = df.replace([np.inf, -np.inf], 0.0001)
+    df.dropna(inplace=True)
+    standardize(df)
+    df.dropna(inplace=True)
+    df = renaming(df)
+    prep_label(df, "close", -forward_window, "one_hot")
+    X, y = create_sequence_all(df, lag_window)
+    X, y = torch.tensor(X, dtype=torch.float32), torch.Tensor(y)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.33, random_state=32
+    )
+    #print(X_train.shape, y_train.shape, X_test.shape, y_test.shape)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    X_train, y_train = X_train.to(device), y_train.to(device)
+    X_test, y_test = X_test.to(device), y_test.to(device)
+    train_dataset = TensorDataset(X_train, y_train)
+    test_dataset = TensorDataset(X_test, y_test)
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=True)
+
+    return train_loader, test_loader
+
+
 def define_model(model: nn.Module):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.cuda.empty_cache()
 
-    # Instantiate the model, define loss function and optimizer
-    # will return a tuple of (model, criterion, optimizer)
-
-    model = model
+    # Instantiate the model
     model = model.to(device)
 
     return model
@@ -91,33 +115,6 @@ def train_eval_model(
     return model
 
 
-def prep_for_dl(df: pd.DataFrame, lag_window: int, forward_window: int):
-    """prepare dataset"""
-    df["open_interest"] = df["open_interest"].pct_change()
-    df["volume"] = df["volume"].pct_change()
-    df = df.replace([np.inf, -np.inf], 0.0001)
-    df.dropna(inplace=True)
-    standardize(df)
-    df.dropna(inplace=True)
-    df = renaming(df)
-    prep_label(df, "close", -forward_window, "one_hot")
-    X, y = create_sequence_all(df, lag_window)
-    X, y = torch.tensor(X, dtype=torch.float32), torch.Tensor(y)
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.33, random_state=32
-    )
-    #print(X_train.shape, y_train.shape, X_test.shape, y_test.shape)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    X_train, y_train = X_train.to(device), y_train.to(device)
-    X_test, y_test = X_test.to(device), y_test.to(device)
-    train_dataset = TensorDataset(X_train, y_train)
-    test_dataset = TensorDataset(X_test, y_test)
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=True)
-
-    return train_loader, test_loader
-
-
 def prep_for_eval(df: pd.DataFrame):
     """prepare dataset"""
     df["open_interest"] = df["open_interest"].pct_change()
@@ -138,27 +135,6 @@ def save_model(model: nn.Module, name: str):
 
     torch.save(model, f"models/{name}.pth")
     print("Model saved")
-
-
-def standardize(df: pd.DataFrame):
-    """
-    Standardize columns
-    Use the same standardization for OHLC
-    The rest are standardized separately
-    Use StandardScaler as it is more robust to outliers
-    """
-
-    # cols = ["open", "high", "low", "close"]
-    # print(df.columns)
-    # df[cols] = scaler.fit_transform(df[cols].values.reshape(-1, 1))
-
-    # for col in df.columns:
-    #     if col not in cols:
-    #         df[col] = scaler.fit_transform(df[col].values.reshape(-1, 1))
-    
-    for col in df.columns:
-        scaler = StandardScaler()
-        df[col] = scaler.fit_transform(df[col].values.reshape(-1, 1))
 
 
 def collate_fn(batch):
