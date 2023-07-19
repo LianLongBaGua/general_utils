@@ -3,8 +3,9 @@ from vnpy_ctastrategy.backtesting import BacktestingEngine, OptimizationSetting
 import plotly.graph_objects as go
 
 import seaborn as sns
-from usefultools.useful_tools import *
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 
 
 def graph_result(x, y, result):
@@ -29,8 +30,26 @@ def graph_result(x, y, result):
         scene={
             'xaxis':{'title': x},
             'yaxis':{'title': y},
-            'zaxis':{'title': optimization_setting.target_name},
+            'zaxis':{'title': Optimization_Setting.target_name},
         },
         margin={'l':65, 'r':50, 'b':65, 't':90}
     )
     fig.show()
+
+
+def graph_two_ys(y_1: np.ndarray, label_1: str, y_2: np.ndarray, label_2: str):
+    fig, ax1 = plt.subplots()
+    color = 'tab:red'
+    ax1.set_ylabel(label_1, color=color)
+    ax1.plot(y_1, color=color)
+    ax1.tick_params(axis='y', labelcolor=color)
+
+    ax2 = ax1.twinx()  
+
+    color = 'tab:blue'
+    ax2.set_ylabel(label_2, color=color)  
+    ax2.plot(y_2, color=color)
+    ax2.tick_params(axis='y', labelcolor=color)
+
+    fig.tight_layout()  
+    plt.show()

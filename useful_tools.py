@@ -1,4 +1,5 @@
 from datetime import datetime
+import itertools
 
 import pandas as pd
 import numpy as np
@@ -7,7 +8,23 @@ from elite_database import Database
 from vnpy.trader.constant import Interval, Exchange
 from elite_ctastrategy import HistoryManager
 
-from hurst import compute_Hc, random_walk
+from hurst import compute_Hc
+
+
+def resample(df: pd.DataFrame, interval: str) -> pd.DataFrame:
+    """K线合成"""
+    df_resampled = df.resample(interval).agg({
+        "open": "first",
+        "high": "max",
+        "low": "min",
+        "close": "last",
+        "volume": "sum"
+    })
+
+    df_resampled = df_resampled.drop_duplicates()
+    df.fillna(method='pad', inplace=True)
+
+    return df_resampled
 
 
 def calculate_periodic_hurst(series: np.array, period: int, step: int = 1):
@@ -34,15 +51,24 @@ def calculate_periodic_efficiency_ratio(series: np.array, period: int, step: int
     return er
 
 
-def calculate_efficiency_ratio(open: np.array, close: np.array, period: int):
+def calculate_efficiency_ratio(high: np.array, low: np.array, period: int):
     """
     calculate the efficiency ratio for a given period
     """
-    ind_changes = close[-period:] - open[-period:]
-    sum_of_ind_changes = abs(ind_changes).cumsum()[-1]
-    er = (close[-1] - open[-period]) / sum_of_ind_changes
-    return abs(er)
+    ind_changes = high[-period:] - low[-period:]
+    sum_of_ind_changes = abs(ind_changes).sum()
+    if sum_of_ind_changes < 0.0001:
+        return 1
+    assert sum_of_ind_changes != 0., "sum of individual changes cannot be zero"
+    er_value = (high[-1] - low[-(period+1)]) / sum_of_ind_changes
+    return abs(er_value)
 
+
+def calculate_eff(high: np.array, low: np.array, period: int):
+    one_period_diff: np.array = high[-period:] - low[-period:]
+    sum_of_one_period_diff: float = one_period_diff.sum()
+    nday_diff = high[-1] - low[-(period+1)]
+    return abs(nday_diff) / sum_of_one_period_diff
 
 def round_to_ones(pred):
     """
