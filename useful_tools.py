@@ -18,7 +18,8 @@ def resample(df: pd.DataFrame, interval: str) -> pd.DataFrame:
         "high": "max",
         "low": "min",
         "close": "last",
-        "volume": "sum"
+        "volume": "sum",
+        "open_interest": "last"
     })
 
     df_resampled = df_resampled.drop_duplicates()
