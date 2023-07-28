@@ -1,8 +1,10 @@
 from datetime import datetime
-import itertools
+import warnings
 
 import pandas as pd
 import numpy as np
+import talib
+from talib import abstract
 
 from elite_database import Database
 from vnpy.trader.constant import Interval, Exchange
@@ -39,38 +41,6 @@ def calculate_periodic_hurst(series: np.array, period: int, step: int = 1):
     return hurst
 
 
-def calculate_periodic_efficiency_ratio(series: np.array, period: int, step: int = 1):
-    """
-    calculate the efficiency ratio for a given period in a rolling manner
-    """
-    er = []
-    for i in range(0, len(series) - period, step):
-        er.append(
-            (series[i + period] - series[i])
-            / (max(series[i : i + period]) - min(series[i : i + period]))
-        )
-    return er
-
-
-def calculate_efficiency_ratio(high: np.array, low: np.array, period: int):
-    """
-    calculate the efficiency ratio for a given period
-    """
-    ind_changes = high[-period:] - low[-period:]
-    sum_of_ind_changes = abs(ind_changes).sum()
-    if sum_of_ind_changes < 0.0001:
-        return 1
-    assert sum_of_ind_changes != 0., "sum of individual changes cannot be zero"
-    er_value = (high[-1] - low[-(period+1)]) / sum_of_ind_changes
-    return abs(er_value)
-
-
-def calculate_eff(high: np.array, low: np.array, period: int):
-    one_period_diff: np.array = high[-period:] - low[-period:]
-    sum_of_one_period_diff: float = one_period_diff.sum()
-    nday_diff = high[-1] - low[-(period+1)]
-    return abs(nday_diff) / sum_of_one_period_diff
-
 def round_to_ones(pred):
     """
     round the input tensor to the nearest integer
@@ -80,18 +50,6 @@ def round_to_ones(pred):
     one_hot.scatter_(1, max_indices.unsqueeze(1), 1)
 
     return one_hot
-
-
-def standardize(df: pd.DataFrame):
-    """
-    Standardize columns
-    Use the same standardization for OHLC
-    The rest are standardized separately
-    Use StandardScaler as it is more robust to outliers
-    """
-    for col in df.columns:
-        scaler = StandardScaler()
-        df[col] = scaler.fit_transform(df[col].values.reshape(-1, 1))
 
 
 def load_essentials(symbol: str, start: str, end: str, exchange: str):
@@ -346,18 +304,167 @@ def get_volatility_corr(
     return corr
 
 
-# def get_volatility_change_corr(df: pd.DataFrame, start: int, end: int, n: int, interval: int):
-#     """get volatility change correlation"""
-#     corr = pd.DataFrame()
-#     df_forward, df_backward = df.copy(), df.copy()
-#     for i in range(start, end, interval):
-#         calc_nperiod_volatility_backward(df_backward, interval)
-#         calc_volatility_change(df_backward, n)
-#         df_forward.join(calc_nperiod_volatility_forward(df_backward, i))
-#     df_conc = pd.concat([df_forward, df_backward], axis=1)
-#     df_conc = drop_ohlcv_cols(df_conc)
-#     corr = df_conc.corr()
-#     for i in range(start, end, interval):
-#         corr = corr.drop([f"{i}_period_volatility_backward"], axis=1)
-#         corr = corr.drop([f"{i}_period_volatility_forward"], axis=0)
-#     return corr
+def calculate_indicators(df, group_number, default_lookback=14):
+    # Split the functions into 5 groups
+    all_functions = talib.get_functions()
+    group_size = len(all_functions) // 100
+    function_groups = [all_functions[i:i+group_size] for i in range(0, len(all_functions), group_size)]
+    
+    warnings.filterwarnings('ignore', category=pd.errors.PerformanceWarning)
+    for name in function_groups[group_number]:
+        try:
+            indicator = getattr(abstract, name)
+
+            # Set up the default inputs for the function
+            inputs = {
+                'open': df['open'],
+                'high': df['high'],
+                'low': df['low'],
+                'close': df['close'],
+                'volume': df['volume'],
+                'timeperiod': default_lookback,
+            }
+
+            # Call the function with the inputs, ignoring any arguments it doesn't need
+            output = indicator(inputs, **{key: inputs[key] for key in indicator.parameters.keys()})
+            
+            if output is None:
+                continue
+
+            # If the function returns a single Series, add it to the DataFrame directly
+            if isinstance(output, pd.core.series.Series):
+                df[name] = output
+            # If the function returns a list of Series, add each one to the DataFrame
+            else:
+                for i, result in enumerate(output):
+                    df[f'{name}_{i}'] = result
+
+        except Exception as e:
+            print(f"Error with {name}: {e}")
+            continue
+    return df
+
+def prepare(hm):
+    """
+    Prepare the technical indicators
+    """
+    hm['RSI7'] = talib.RSI(hm.close, 7) 
+    hm['RSI12'] = talib.RSI(hm.close, 12) 
+    hm['RSI30'] = talib.RSI(hm.close, 30)
+    hm['RSI50'] = talib.RSI(hm.close, 50)
+    hm['RSI75'] = talib.RSI(hm.close, 75)
+    hm['RSI100'] = talib.RSI(hm.close, 100)
+    hm['ROC25'] = talib.ROC(hm.close, 25)
+    hm['ROC50'] = talib.ROC(hm.close, 50)
+    hm['ROC75'] = talib.ROC(hm.close, 75)
+    hm['ROC100'] = talib.ROC(hm.close, 100)
+    hm['MOM30'] = talib.MOM(hm.close, 30)
+    hm['MOM50'] = talib.MOM(hm.close, 50)
+    hm['MOM75'] = talib.MOM(hm.close, 75)
+    hm['MOM100'] = talib.MOM(hm.close, 100)
+    hm['PLUSDM30'] = talib.PLUS_DM(hm.high, hm.low, 30)
+    hm['PLUSDM50'] = talib.PLUS_DM(hm.high, hm.low, 50)
+    hm['PLUSDM75'] = talib.PLUS_DM(hm.high, hm.low, 75)
+    hm['PLUSDM100'] = talib.PLUS_DM(hm.high, hm.low, 100)
+    hm['MFI25'] = talib.MFI(hm.high, hm.low, hm.close, hm.volume, 20)
+    hm['MFI50'] = talib.MFI(hm.high, hm.low, hm.close, hm.volume, 50)
+    hm['MFI75'] = talib.MFI(hm.high, hm.low, hm.close, hm.volume, 75)
+    hm['MFI100'] = talib.MFI(hm.high, hm.low, hm.close, hm.volume, 100)
+
+    _, hm['DEA'], hm['MACD'] = talib.MACD(hm.close, 12, 26, 9)
+
+    hm['NATR14'] = talib.NATR(hm.high, hm.low, hm.close, 14)
+    hm['NATR30'] = talib.NATR(hm.high, hm.low, hm.close, 30)
+    hm['NATR50'] = talib.NATR(hm.high, hm.low, hm.close, 50)
+    hm['NATR75'] = talib.NATR(hm.high, hm.low, hm.close, 75)
+    hm['NATR100'] = talib.NATR(hm.high, hm.low, hm.close, 100)
+
+    hm['KELTNER14'] = (hm.close - talib.SMA(hm.close, 14)) / hm['ATR14']
+    hm['KELTNER30'] = (hm.close - talib.SMA(hm.close, 30)) / hm['ATR30']
+    hm['KELTNER50'] = (hm.close - talib.SMA(hm.close, 50)) / hm['ATR50']
+    hm['KELTNER75'] = (hm.close - talib.SMA(hm.close, 75)) / hm['ATR75']
+    hm['KELTNER100'] = (hm.close - talib.SMA(hm.close, 100)) / hm['ATR100']
+
+    hm['ULTOSC'] = talib.ULTOSC(hm.high, hm.low, hm.close, 7, 14, 28)
+    hm['WILLR14'] = talib.WILLR(hm.high, hm.low, hm.close, 14)
+    hm['STOCHRSI14'] = talib.STOCHRSI(hm.close, 14, 3, 3)
+    hm['STOCHRSI30'] = talib.STOCHRSI(hm.close, 30, 3, 3)
+    hm['STOCHRSI50'] = talib.STOCHRSI(hm.close, 50, 3, 3)
+    hm['STOCHRSI75'] = talib.STOCHRSI(hm.close, 75, 3, 3)
+    hm['STOCHRSI100'] = talib.STOCHRSI(hm.close, 100, 3, 3)
+
+    hm['OBV'] = talib.OBV(hm.close, hm.volume)
+    hm['ADOSC'] = talib.ADOSC(hm.high, hm.low, hm.close, hm.volume, 3, 10)
+    hm['AD'] = talib.AD(hm.high, hm.low, hm.close, hm.volume)
+
+    hm['CDL2CROWS'] = talib.CDL2CROWS(hm.open, hm.high, hm.low, hm.close)
+    hm['CDL3BLACKCROWS'] = talib.CDL3BLACKCROWS(hm.open, hm.high, hm.low, hm.close)
+    hm['CDL3INSIDE'] = talib.CDL3INSIDE(hm.open, hm.high, hm.low, hm.close)
+    hm['CDL3LINESTRIKE'] = talib.CDL3LINESTRIKE(hm.open, hm.high, hm.low, hm.close)
+    hm['CDL3OUTSIDE'] = talib.CDL3OUTSIDE(hm.open, hm.high, hm.low, hm.close)
+    hm['CDL3STARSINSOUTH'] = talib.CDL3STARSINSOUTH(hm.open, hm.high, hm.low, hm.close)
+    hm['CDL3WHITESOLDIERS'] = talib.CDL3WHITESOLDIERS(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLABANDONEDBABY'] = talib.CDLABANDONEDBABY(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLADVANCEBLOCK'] = talib.CDLADVANCEBLOCK(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLBELTHOLD'] = talib.CDLBELTHOLD(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLBREAKAWAY'] = talib.CDLBREAKAWAY(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLCLOSINGMARUBOZU'] = talib.CDLCLOSINGMARUBOZU(hm.open, hm.high, hm.low, hm.close)
+
+    hm['CDLCONCEALBABYSWALL'] = talib.CDLCONCEALBABYSWALL(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLCOUNTERATTACK'] = talib.CDLCOUNTERATTACK(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLDARKCLOUDCOVER'] = talib.CDLDARKCLOUDCOVER(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLDOJI'] = talib.CDLDOJI(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLDOJISTAR'] = talib.CDLDOJISTAR(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLDRAGONFLYDOJI'] = talib.CDLDRAGONFLYDOJI(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLENGULFING'] = talib.CDLENGULFING(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLEVENINGDOJISTAR'] = talib.CDLEVENINGDOJISTAR(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLEVENINGSTAR'] = talib.CDLEVENINGSTAR(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLGAPSIDESIDEWHITE'] = talib.CDLGAPSIDESIDEWHITE(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLGRAVESTONEDOJI'] = talib.CDLGRAVESTONEDOJI(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLHAMMER'] = talib.CDLHAMMER(hm.open, hm.high, hm.low, hm.close)
+
+    hm['CDLHANGINGMAN'] = talib.CDLHANGINGMAN(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLHARAMI'] = talib.CDLHARAMI(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLHARAMICROSS'] = talib.CDLHARAMICROSS(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLHIGHWAVE'] = talib.CDLHIGHWAVE(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLHIKKAKE'] = talib.CDLHIKKAKE(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLHIKKAKEMOD'] = talib.CDLHIKKAKEMOD(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLHOMINGPIGEON'] = talib.CDLHOMINGPIGEON(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLIDENTICAL3CROWS'] = talib.CDLIDENTICAL3CROWS(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLINNECK'] = talib.CDLINNECK(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLINVERTEDHAMMER'] = talib.CDLINVERTEDHAMMER(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLKICKING'] = talib.CDLKICKING(hm.open, hm.high, hm.low, hm.close)
+    
+    hm['CDLKICKINGBYLENGTH'] = talib.CDLKICKINGBYLENGTH(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLLADDERBOTTOM'] = talib.CDLLADDERBOTTOM(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLLONGLEGGEDDOJI'] = talib.CDLLONGLEGGEDDOJI(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLLONGLINE'] = talib.CDLLONGLINE(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLMARUBOZU'] = talib.CDLMARUBOZU(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLMATCHINGLOW'] = talib.CDLMATCHINGLOW(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLMATHOLD'] = talib.CDLMATHOLD(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLMORNINGDOJISTAR'] = talib.CDLMORNINGDOJISTAR(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLMORNINGSTAR'] = talib.CDLMORNINGSTAR(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLONNECK'] = talib.CDLONNECK(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLPIERCING'] = talib.CDLPIERCING(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLRICKSHAWMAN'] = talib.CDLRICKSHAWMAN(hm.open, hm.high, hm.low, hm.close)
+
+    hm['CDLRISEFALL3METHODS'] = talib.CDLRISEFALL3METHODS(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLSEPARATINGLINES'] = talib.CDLSEPARATINGLINES(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLSHOOTINGSTAR'] = talib.CDLSHOOTINGSTAR(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLSHORTLINE'] = talib.CDLSHORTLINE(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLSPINNINGTOP'] = talib.CDLSPINNINGTOP(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLSTALLEDPATTERN'] = talib.CDLSTALLEDPATTERN(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLSTICKSANDWICH'] = talib.CDLSTICKSANDWICH(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLTAKURI'] = talib.CDLTAKURI(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLTASUKIGAP'] = talib.CDLTASUKIGAP(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLTHRUSTING'] = talib.CDLTHRUSTING(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLTRISTAR'] = talib.CDLTRISTAR(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLUNIQUE3RIVER'] = talib.CDLUNIQUE3RIVER(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLUPSIDEGAP2CROWS'] = talib.CDLUPSIDEGAP2CROWS(hm.open, hm.high, hm.low, hm.close)
+    hm['CDLXSIDEGAP3METHODS'] = talib.CDLXSIDEGAP3METHODS(hm.open, hm.high, hm.low, hm.close)
+
+
+
+    hm = hm.dropna()
+
+    return hm
