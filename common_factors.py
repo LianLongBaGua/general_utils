@@ -18,23 +18,23 @@ class CommonFactors:
         natr_risk_window: int = 20
         natr_multiplier: float = 4
         """
-        self.atr_risk_value = atr(hm.high, hm.low, hm.close, self.atr_risk_window)[-1]
+        natr_risk_value = atr(hm.high, hm.low, hm.close, natr_risk_window)[-1]
 
         if last_target == 0:
-            self.intra_trade_high = hm.high[-1]
-            self.intra_trade_low = hm.low[-1]
+            intra_trade_high = hm.high[-1]
+            intra_trade_low = hm.low[-1]
             return last_target
         if last_target > 0:
-            self.intra_trade_high = max(self.intra_trade_high, hm.high[-1])
+            intra_trade_high = max(intra_trade_high, hm.high[-1])
             moving_stop_price: float = (
-                self.intra_trade_high - self.atr_risk_value * self.atr_multiplier
+                intra_trade_high - natr_risk_value * natr_multiplier
             )
             if hm.close[-1] <= moving_stop_price:
                 return 0
         elif last_target < 0:
-            self.intra_trade_low = min(self.intra_trade_low, hm.low[-1])
+            intra_trade_low = min(intra_trade_low, hm.low[-1])
             moving_stop_price: float = (
-                self.intra_trade_low + self.atr_risk_value * self.atr_multiplier
+                intra_trade_low + natr_risk_value * natr_multiplier
             )
             if hm.close[-1] >= moving_stop_price:
                 return 0
@@ -48,3 +48,9 @@ class CommonFactors:
         rsi_array: ndarray = rsi(hm.close, rsi_window)
         rsi_filter: bool = rsi_lower < rsi_array[-1] < rsi_mid
         return rsi_filter
+    
+    def count_bars(self, hm: HistoryManager, confirmation_window: int, bar_interval: str):
+        """
+        Count the number of bars since the last cross
+        """
+        return len(hm.close) - 1
