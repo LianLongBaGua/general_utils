@@ -53,3 +53,11 @@ def graph_two_ys(y_1: np.ndarray, label_1: str, y_2: np.ndarray, label_2: str):
 
     fig.tight_layout()  
     plt.show()
+
+
+def my_plotter(ax, data1, data2, param_dict):
+    """
+    A helper function to make a graph
+    """
+    out = ax.plot(data1, data2, **param_dict)
+    return out
