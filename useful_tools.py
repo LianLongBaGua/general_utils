@@ -1,13 +1,12 @@
 from datetime import datetime
-import warnings
 
 import pandas as pd
 import numpy as np
-import talib
-from talib import abstract
 
 from elite_database import Database
 from vnpy.trader.constant import Interval, Exchange
+from elite_trader.auth import authenticate
+
 
 from sklearn.preprocessing import StandardScaler
 from pandas_ta import log_return
@@ -33,6 +32,7 @@ def resample(df: pd.DataFrame, interval: str) -> pd.DataFrame:
 
 def load_essentials(symbol: str, start: str, end: str, exchange: str):
     """Load data from database with interval=1m"""
+    authenticate("czl", "Vnpy1234")
     db = Database()
     df = db.load_bar_df(
         symbol,
