@@ -16,3 +16,10 @@ def prepare_desired_pos(df, lag=50, multiplier=10):
     df.drop(columns=[f'{lag}m_ret'], inplace=True)
 
     return df
+
+def rle(df):
+    """Run length encoding"""
+    mask = df['pos_change_signal'].ne(df['pos_change_signal'].shift())
+    groups = mask.cumsum()
+    rle_result = df.groupby(groups)['pos_change_signal'].agg([('value', 'first'), ('count', 'size')])
+    rle_result.groupby('value').mean().plot(kind='bar', title='Average count of consecutive same values')
