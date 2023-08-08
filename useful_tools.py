@@ -97,19 +97,10 @@ def drop_ohlcv_cols(df: pd.DataFrame):
     )
 
 
-def prepare_desired_pos(df, lag=50, multiplier=10):
-    scaler = StandardScaler()
-    df[f'{lag}m_ret'] = scaler.fit_transform(log_return(df.close, length=lag, offset=-lag).values.reshape(-1,1))
-    df.dropna(inplace=True)
-    df['pos_change'] = df[f'{lag}m_ret'] * multiplier
-    df['pos_change'] = df['pos_change'].apply(int)
-    df['pos_rolling'] = df['pos_change'].rolling(lag, min_periods=1).sum()
-    df.drop(columns=[f'{lag}m_ret'], inplace=True)
-
 def generate_simple_features(df):
-    df['open_change'] = df.open.pct_change()
-    df['high_change'] = df.high.pct_change()
-    df['low_change'] = df.low.pct_change()
-    df['close_change'] = df.close.pct_change()
-    df['volume_change'] = df.volume.pct_change()
+    df['open_change'] = df.open.pct_change(10)
+    df['high_change'] = df.high.pct_change(10)
+    df['low_change'] = df.low.pct_change(10)
+    df['close_change'] = df.close.pct_change(10)
+    df['volume_change'] = df.volume.pct_change(10)
     df.dropna(inplace=True)
