@@ -12,8 +12,6 @@ def generate_og_features_df(df: pd.DataFrame, lags: list):
         df["MFI" + str(lag)] = talib.MFI(
             df["high"], df["low"], df["close"], df["volume"], lag
         )
-    df["AD" + str(lag)] = talib.AD(df["high"], df["low"], df["close"], df["volume"])
-    df["OBV" + str(lag)] = talib.OBV(df["close"], df["volume"])
 
 
 def generate_mom_features_df(df: pd.DataFrame, lags: list):
@@ -284,6 +282,7 @@ def generate_all_features_df(df: pd.DataFrame, lags: list):
     generate_mom_features_df(df, lags)
     generate_math_features_df(df, lags)
     generate_pattern_features_df(df)
+    generate_time_features(df)
     df.dropna(inplace=True)
 
     # sort by name
