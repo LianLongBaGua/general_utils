@@ -1,8 +1,7 @@
 import pandas as pd
+import numpy as np
 import talib
 import warnings
-from sklearn.preprocessing import StandardScaler
-from pandas_ta import log_return
 
 def generate_og_features_df(df: pd.DataFrame, lags: list):
     for lag in lags:
@@ -274,6 +273,16 @@ def generate_time_features(df: pd.DataFrame):
     df["dayofmonth"] = df.index.day
     df["month"] = df.index.month
     df["quarter"] = df.index.quarter
+    df['is_within_15_mins_of_open'] = np.where((df['hour'] == 21 & (df['minute'] >= 0) & (df['minute'] <= 15), 1, 0))
+    df['is_within_15_mins_of_close'] = np.where((df['hour'] == 14) & (df['minute'] >= 45) & (df['minute'] <= 59), 1, 0)
+    df['is_within_7_mins_of_open'] = np.where((df['hour'] == 21 & (df['minute'] >= 0) & (df['minute'] <= 7), 1, 0))
+    df['is_within_7_mins_of_close'] = np.where((df['hour'] == 14) & (df['minute'] >= 53) & (df['minute'] <= 59), 1, 0)
+    df['is_within_5_mins_of_open'] = np.where((df['hour'] == 9) & (df['minute'] >= 25) & (df['minute'] <= 30), 1, 0)
+    df['is_within_5_mins_of_close'] = np.where((df['hour'] == 15) & (df['minute'] >= 55) & (df['minute'] <= 59), 1, 0)
+    df['is_within_3_mins_of_open'] = np.where((df['hour'] == 9) & (df['minute'] >= 27) & (df['minute'] <= 30), 1, 0)
+    df['is_within_3_mins_of_close'] = np.where((df['hour'] == 15) & (df['minute'] >= 57) & (df['minute'] <= 59), 1, 0)
+    df['is_within_1_mins_of_open'] = np.where((df['hour'] == 9) & (df['minute'] >= 29) & (df['minute'] <= 30), 1, 0)
+    df['is_within_1_mins_of_close'] = np.where((df['hour'] == 15) & (df['minute'] >= 59) & (df['minute'] <= 59), 1, 0)
 
 
 def generate_all_features_df(df: pd.DataFrame, lags: list):
@@ -282,7 +291,7 @@ def generate_all_features_df(df: pd.DataFrame, lags: list):
     generate_mom_features_df(df, lags)
     generate_math_features_df(df, lags)
     generate_pattern_features_df(df)
-    generate_time_features(df)
+    # generate_time_features(df)
     df.dropna(inplace=True)
 
     # sort by name

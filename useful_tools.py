@@ -45,6 +45,15 @@ def load_essentials(symbol: str, start: str, end: str, exchange: str):
 
     return renaming(df)
 
+def keep_essentials(df: pd.DataFrame):
+    """Keep only OHLCV"""
+    df.drop(
+        columns=["exchange", "turnover","symbol", "datetime"],
+        axis=1,
+        inplace=True,
+    )
+    return renaming(df)
+
 
 def trim_df(df: pd.DataFrame, keep_symbol=False):
     """Trim everything other than OHLCV with option to keep symbol"""
